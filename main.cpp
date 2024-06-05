@@ -19,8 +19,12 @@ public:
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(MS_PER_FRAME));
     }
+
+    long GetMillisecondsPerFrame() const { return MS_PER_FRAME; }
+    void SetMillisecondsPerFrame(long msPerFrame) { MS_PER_FRAME = msPerFrame; }
+
 private:
-    static constexpr long MS_PER_FRAME { 75 };
+    long MS_PER_FRAME { 200 };
 };
 
 enum class UserInput { None, Left, Right, Up, Down, Quit };
@@ -49,6 +53,29 @@ public:
 
 private:
     Console console{};
+};
+
+class Coordinate
+{
+public:
+    Coordinate(int _x, int _y) : x(_x), y(_y) {}
+    int x;
+    int y;
+};
+
+class Tail
+{
+public:
+    Tail() {}
+
+    void Update()
+    {
+        
+    }
+
+    static const char ascii = 'o';
+
+    std::vector<Coordinate> coordinates{};
 };
 
 class Player
@@ -83,25 +110,28 @@ public:
             speed[1] = 1;
         }
             
-
-        if ((speed[0] > 0 && x < xMax) || (speed[0] < 0 && x > 0))
+        if (speed[0] > 0 || speed[0] < 0)
             x += speed[0];
-        if ((speed[1] > 0 && y < yMax) || (speed[1] < 0 && y > 0))
+        if (speed[1] > 0 || speed[1] < 0)
             y += speed[1];
+        if (x == -1 || x == xMax+1 || y == -1 || y == yMax+1)
+            outOfBounds = true;
     }
 
     static const char ascii = '@';
 
     int GetX() const { return x; }
     int GetY() const { return y; }
-
+    bool OutOfBounds() const { return outOfBounds; }
 
 private:
     int x{0};
     int y{0};
     int xMax{};
     int yMax{};
+    bool outOfBounds{};
     std::vector<int> speed{1 ,0};
+    Tail tail{};
 };
 
 class Pellet
@@ -145,6 +175,8 @@ private:
     bool spawned{};
 };
 
+static Frame frame;
+
 class Game
 {
 public:
@@ -162,22 +194,35 @@ public:
     {
         map[player.GetY()][player.GetX()] = empty;
         player.Update(userInput);
+        if (player.OutOfBounds())
+        {
+            over = true;
+            return;
+        }
         map[player.GetY()][player.GetX()] = player.ascii;
 
         if (!pellet.Update(player))
             map[pellet.GetY()][pellet.GetX()] = pellet.ascii;
         else
+        {
             score++;
+            long ms = frame.GetMillisecondsPerFrame();
+            if (ms > 40)
+                frame.SetMillisecondsPerFrame(ms-10);
+        }
+            
     }
 
     const std::vector<std::string>& GetMap() { return map; }
     int GetScore() { return score; }
+    bool Over() const {return over; }
 
 private:
     static constexpr char empty = ' ';
     int width;
     int height;
     int score{};
+    bool over{};
     std::vector<std::string> map{};
     Player player;
     Pellet pellet;
@@ -206,12 +251,12 @@ private:
 
 int main()
 {
-    Frame frame{};
+    frame = {};
     Console console{};
     Render render{console};
     Game game{console.width, console.height};
     Input input{console};
-    
+
     while (1)
     {
         frame.limit();
@@ -221,6 +266,8 @@ int main()
         if (userInput == UserInput::Quit) break;
 
         game.Update(userInput);
+        
+        if (game.Over()) break;
 
         render.Draw(game.GetMap());
     }
